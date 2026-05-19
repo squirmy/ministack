@@ -13,11 +13,10 @@
   <a href="https://hub.docker.com/r/ministackorg/ministack"><img src="https://img.shields.io/docker/image-size/ministackorg/ministack/latest" alt="Docker Image Size"></a>
   <a href="https://github.com/ministackorg/ministack/blob/master/LICENSE"><img src="https://img.shields.io/github/license/ministackorg/ministack" alt="License"></a>
   <img src="https://img.shields.io/badge/python-3.12-blue" alt="Python">
-  <a href="https://github.com/ministackorg/ministack/stargazers"><img src="https://img.shields.io/github/stars/ministackorg/ministack" alt="GitHub stars"></a>
 </p>
 
 <p align="center">
-  <a href="https://ministack.org">Website</a> · <a href="https://hub.docker.com/r/ministackorg/ministack">Docker Hub</a> · <a href="https://www.linkedin.com/company/ministackorg/">LinkedIn</a> · <a href="https://www.producthunt.com/products/ministack">Product Hunt</a>
+  <a href="https://ministack.org">Ministack.org</a> · <a href="https://hub.docker.com/r/ministackorg/ministack">Docker Hub</a> · <a href="https://www.linkedin.com/company/ministackorg/">LinkedIn</a>
 </p>
 
 ---
@@ -26,7 +25,7 @@
 
 LocalStack recently moved its core services behind a paid plan. If you relied on LocalStack Community for local development and CI/CD pipelines, MiniStack is your free alternative.
 
-- **40+ AWS services** emulated on a single port (4566)
+- **55+ AWS services** emulated on a single port (4566)
 - **Drop-in compatible** — works with `boto3`, AWS CLI, Terraform, CDK, Pulumi, any SDK
 - **Real infrastructure** — RDS spins up actual Postgres/MySQL containers, ElastiCache spins up real Redis, Athena runs real SQL via DuckDB (full image only), ECS runs real Docker containers
 - **Tiny footprint** — ~270MB image, ~21MB RAM at idle vs LocalStack's ~1GB image and ~500MB RAM
