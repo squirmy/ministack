@@ -4271,7 +4271,7 @@ def _s3tables_bucket_create(logical_id, props, stack_name):
         "createdAt": now_iso(), "tableCount": 0,
     }
     _s3._buckets.setdefault(name, {"created": now_iso(), "objects": {}, "region": get_region()})
-    return arn, {"TableBucketArn": arn}
+    return arn, {"TableBucketARN": arn}
 
 
 def _s3tables_bucket_delete(physical_id, props):
@@ -4281,7 +4281,7 @@ def _s3tables_bucket_delete(physical_id, props):
 
 
 def _s3tables_namespace_create(logical_id, props, stack_name):
-    bucket_arn = props.get("TableBucketArn", "")
+    bucket_arn = props.get("TableBucketARN", "")
     namespace = props.get("Namespace", "")
     key = _s3tables._ns_key(bucket_arn, namespace)
     _s3tables._namespaces[key] = {
@@ -4289,17 +4289,17 @@ def _s3tables_namespace_create(logical_id, props, stack_name):
         "createdBy": get_account_id(), "ownerAccountId": get_account_id(),
         "tableBucketARN": bucket_arn,
     }
-    return f"{bucket_arn}|{namespace}", {"TableBucketArn": bucket_arn, "Namespace": namespace}
+    return f"{bucket_arn}|{namespace}", {"TableBucketARN": bucket_arn, "Namespace": namespace}
 
 
 def _s3tables_namespace_delete(physical_id, props):
-    bucket_arn = props.get("TableBucketArn", "")
+    bucket_arn = props.get("TableBucketARN", "")
     namespace = props.get("Namespace", "")
     _s3tables._namespaces.pop(_s3tables._ns_key(bucket_arn, namespace), None)
 
 
 def _s3tables_table_create(logical_id, props, stack_name):
-    bucket_arn = props.get("TableBucketArn", "")
+    bucket_arn = props.get("TableBucketARN", "")
     namespace = props.get("Namespace", "")
     table_name = props.get("TableName", "")
     bucket_name = bucket_arn.rsplit("/", 1)[-1]
@@ -4321,12 +4321,12 @@ def _s3tables_table_create(logical_id, props, stack_name):
         if b["arn"] == bucket_arn:
             b["tableCount"] = b.get("tableCount", 0) + 1
             break
-    return table_arn, {"TableArn": table_arn, "TableBucketArn": bucket_arn,
+    return table_arn, {"TableArn": table_arn, "TableBucketARN": bucket_arn,
                        "Namespace": namespace, "TableName": table_name}
 
 
 def _s3tables_table_delete(physical_id, props):
-    bucket_arn = props.get("TableBucketArn", "")
+    bucket_arn = props.get("TableBucketARN", "")
     namespace = props.get("Namespace", "")
     table_name = props.get("TableName", "")
     _s3tables._tables.pop(_s3tables._table_key(bucket_arn, namespace, table_name), None)

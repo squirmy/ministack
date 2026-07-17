@@ -4412,7 +4412,7 @@ def test_cfn_s3tables_resources(cfn, s3tables):
             "Ns": {
                 "Type": "AWS::S3Tables::Namespace",
                 "Properties": {
-                    "TableBucketArn": {"Fn::GetAtt": ["Bucket", "TableBucketArn"]},
+                    "TableBucketARN": {"Fn::GetAtt": ["Bucket", "TableBucketARN"]},
                     "Namespace": "myns",
                 },
                 "DependsOn": "Bucket",
@@ -4420,7 +4420,7 @@ def test_cfn_s3tables_resources(cfn, s3tables):
             "Table": {
                 "Type": "AWS::S3Tables::Table",
                 "Properties": {
-                    "TableBucketArn": {"Fn::GetAtt": ["Bucket", "TableBucketArn"]},
+                    "TableBucketARN": {"Fn::GetAtt": ["Bucket", "TableBucketARN"]},
                     "Namespace": "myns",
                     "TableName": "mytable",
                     "OpenTableFormat": "ICEBERG",
@@ -4429,7 +4429,7 @@ def test_cfn_s3tables_resources(cfn, s3tables):
             },
         },
         "Outputs": {
-            "BucketArn": {"Value": {"Fn::GetAtt": ["Bucket", "TableBucketArn"]}},
+            "BucketArn": {"Value": {"Fn::GetAtt": ["Bucket", "TableBucketARN"]}},
             "TableArn": {"Value": {"Fn::GetAtt": ["Table", "TableArn"]}},
         },
     }
