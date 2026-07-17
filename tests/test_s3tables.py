@@ -485,3 +485,105 @@ def test_s3tables_iceberg_catalog_no_prefix_url_format(s3tables):
         except Exception:
             pass
         s3tables.delete_table_bucket(tableBucketARN=bucket_arn)
+
+
+def test_s3tables_iceberg_config_returns_s3_defaults():
+    """GET /iceberg/v1/config must return S3 connection defaults so clients
+    don't need out-of-band credential / endpoint configuration."""
+    resp = _iceberg_json("/iceberg/v1/config")
+    defaults = resp.get("defaults", {})
+    assert "s3.endpoint" in defaults, "s3.endpoint missing from config defaults"
+    assert "s3.access-key-id" in defaults, "s3.access-key-id missing from config defaults"
+    assert "s3.secret-access-key" in defaults, "s3.secret-access-key missing from config defaults"
+    assert "s3.path-style-access" in defaults, "s3.path-style-access missing from config defaults"
+    assert "client.region" in defaults, "client.region missing from config defaults"
+
+
+def test_s3tables_iceberg_load_table_includes_region(s3tables):
+    """LoadTable response config must include s3.region and client.region so
+    DuckDB / Spark can route S3 data-file requests to the right region."""
+    bucket_name = f"tb-region-{_uuid_mod.uuid4().hex[:6]}"
+    bucket_arn = s3tables.create_table_bucket(name=bucket_name)["arn"]
+    ns = f"ns_{_uuid_mod.uuid4().hex[:6]}"
+    table = f"t_{_uuid_mod.uuid4().hex[:6]}"
+    try:
+        s3tables.create_namespace(tableBucketARN=bucket_arn, namespace=[ns])
+        s3tables.create_table(tableBucketARN=bucket_arn, namespace=ns, name=table, format="ICEBERG")
+
+        resp = _iceberg_json(f"/iceberg/v1/namespaces/{ns}/tables/{table}")
+        config = resp.get("config", {})
+        assert "s3.region" in config, "s3.region missing from LoadTable config"
+        assert "client.region" in config, "client.region missing from LoadTable config"
+    finally:
+        try:
+            s3tables.delete_table(tableBucketARN=bucket_arn, namespace=ns, name=table)
+        except Exception:
+            pass
+        try:
+            s3tables.delete_namespace(tableBucketARN=bucket_arn, namespace=ns)
+        except Exception:
+            pass
+        s3tables.delete_table_bucket(tableBucketARN=bucket_arn)
+
+
+def test_s3tables_iceberg_transactions_commit(s3tables):
+    """POST /iceberg/v1/transactions/commit — DuckDB uses this endpoint for
+    atomic multi-table commits when writing data."""
+    bucket_name = f"tb-txn-{_uuid_mod.uuid4().hex[:6]}"
+    bucket_arn = s3tables.create_table_bucket(name=bucket_name)["arn"]
+    ns = f"ns_{_uuid_mod.uuid4().hex[:6]}"
+    table = f"t_{_uuid_mod.uuid4().hex[:6]}"
+    try:
+        s3tables.create_namespace(tableBucketARN=bucket_arn, namespace=[ns])
+        s3tables.create_table(tableBucketARN=bucket_arn, namespace=ns, name=table, format="ICEBERG")
+
+        snapshot_id = 1234567890
+        resp = _iceberg_json(
+            "/iceberg/v1/transactions/commit",
+            method="POST",
+            payload={
+                "table-changes": [
+                    {
+                        "identifier": {"namespace": [ns], "name": table},
+                        "requirements": [],
+                        "updates": [
+                            {
+                                "action": "add-snapshot",
+                                "snapshot": {
+                                    "snapshot-id": snapshot_id,
+                                    "sequence-number": 1,
+                                    "timestamp-ms": 1700000000000,
+                                    "manifest-list": f"s3://{bucket_name}/{ns}/{table}/metadata/snap.avro",
+                                    "summary": {"operation": "append"},
+                                },
+                            },
+                            {
+                                "action": "set-snapshot-ref",
+                                "ref-name": "main",
+                                "type": "branch",
+                                "snapshot-id": snapshot_id,
+                            },
+                        ],
+                    }
+                ]
+            },
+        )
+        # A successful commit returns 200 with an empty body (or minimal body)
+        assert resp is not None
+
+        # Verify the snapshot was recorded in the table metadata
+        loaded = _iceberg_json(f"/iceberg/v1/namespaces/{ns}/tables/{table}")
+        metadata = loaded.get("metadata", {})
+        snap_ids = [s.get("snapshot-id") for s in metadata.get("snapshots", [])]
+        assert snapshot_id in snap_ids, f"snapshot {snapshot_id} not found after commit"
+        assert metadata.get("current-snapshot-id") == snapshot_id
+    finally:
+        try:
+            s3tables.delete_table(tableBucketARN=bucket_arn, namespace=ns, name=table)
+        except Exception:
+            pass
+        try:
+            s3tables.delete_namespace(tableBucketARN=bucket_arn, namespace=ns)
+        except Exception:
+            pass
+        s3tables.delete_table_bucket(tableBucketARN=bucket_arn)

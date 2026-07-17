@@ -53,6 +53,12 @@ _MINISTACK_HOST = os.environ.get("MINISTACK_HOST", "localhost")
 _GATEWAY_PORT = os.environ.get("GATEWAY_PORT", "4566")
 _SIGV4_CREDENTIAL_REGION_RE = re.compile(r"Credential=[^/]+/[^/]+/([^/]+)/")
 
+
+def _gateway_url() -> str:
+    from ministack.core import tls as _tls
+    scheme = "https" if _tls.use_ssl_enabled() else "http"
+    return f"{scheme}://{_MINISTACK_HOST}:{_GATEWAY_PORT}"
+
 # ── In-memory state ────────────────────────────────────────
 
 _table_buckets = AccountRegionScopedDict()
@@ -421,7 +427,13 @@ def _update_table_metadata_location(bucket_arn, namespace, table_name, data):
 # ── Iceberg REST catalog (data plane for Spark) ───────────
 
 def _iceberg_config():
-    return json_response({"defaults": {}, "overrides": {}})
+    return json_response({"defaults": {
+        "client.region": get_region(),
+        "s3.endpoint": _gateway_url(),
+        "s3.access-key-id": "test",
+        "s3.secret-access-key": "test",
+        "s3.path-style-access": "true",
+    }, "overrides": {}})
 
 
 def _iceberg_allows_cross_region(headers):
@@ -461,7 +473,8 @@ def _iceberg_load_table(namespace, table_name, allow_cross_region):
             "metadata": table.get("_iceberg_metadata", {}),
             "config": {
                 "s3.access-key-id": "test", "s3.secret-access-key": "test",
-                "s3.endpoint": f"http://{_MINISTACK_HOST}:{_GATEWAY_PORT}", "s3.path-style-access": "true",
+                "s3.endpoint": _gateway_url(), "s3.path-style-access": "true",
+                "s3.region": get_region(), "client.region": get_region(),
             },
         })
     return error_response_json("NotFoundException", f"Table {namespace}.{table_name} not found", 404)
@@ -565,6 +578,19 @@ async def _handle_iceberg_request(method, path, headers, body, query_params):
 
     if parts[1] == "v1" and len(parts) == 3 and parts[2] == "config" and method == "GET":
         return _iceberg_config()
+
+    # POST /iceberg/v1/transactions/commit — DuckDB atomic multi-table commit
+    if parts[1] == "v1" and parts[2] == "transactions" and method == "POST":
+        data = json.loads(body) if body else {}
+        for change in data.get("table-changes", []):
+            ident = change.get("identifier", {})
+            ns = ident.get("namespace", [""])
+            ns = ns[0] if isinstance(ns, list) else ns
+            tbl = ident.get("name", "")
+            result = _iceberg_commit_table(ns, tbl, change, allow_cross_region)
+            if result and result[0] not in (200, 204):
+                return result
+        return json_response({})
 
     if len(parts) < 3:
         return None
