@@ -11,6 +11,7 @@ Shapes verified against `botocore.data.s3tables.2024-12-01.service-2`.
 """
 
 import json
+import os
 import urllib.error
 import urllib.request
 import uuid as _uuid_mod
@@ -21,7 +22,7 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 
 
-_ENDPOINT = "http://localhost:4566"
+_ENDPOINT = os.environ.get("MINISTACK_ENDPOINT", "http://localhost:4566")
 
 
 def _iceberg_json(path, method="GET", payload=None, region_name=None, authorization=None):
@@ -438,3 +439,49 @@ def test_s3tables_iceberg_catalog_prefers_signed_region_for_duplicate_names():
                 client.delete_table_bucket(tableBucketARN=bucket_arn)
             except Exception:
                 pass
+
+
+def test_s3tables_iceberg_catalog_no_prefix_url_format(s3tables):
+    """S3 Tables uses /iceberg/v1/namespaces/... (no catalog prefix in path,
+    warehouse in query param) — the format DuckDB sends with ENDPOINT_TYPE s3_tables
+    or an explicit ENDPOINT pointing at the catalog root."""
+    bucket_name = f"tb-noprefix-{_uuid_mod.uuid4().hex[:6]}"
+    bucket_arn = s3tables.create_table_bucket(name=bucket_name)["arn"]
+    ns = f"ns_{_uuid_mod.uuid4().hex[:6]}"
+    table = f"t_{_uuid_mod.uuid4().hex[:6]}"
+    try:
+        s3tables.create_namespace(tableBucketARN=bucket_arn, namespace=[ns])
+        s3tables.create_table(
+            tableBucketARN=bucket_arn,
+            namespace=ns,
+            name=table,
+            format="ICEBERG",
+            metadata={"iceberg": {"schema": {"fields": [{"name": "id", "type": "long"}]}}},
+        )
+
+        # List namespaces — no prefix
+        resp = _iceberg_json("/iceberg/v1/namespaces")
+        ns_names = [
+            (n[0] if isinstance(n, list) else n)
+            for n in resp.get("namespaces", [])
+        ]
+        assert ns in ns_names
+
+        # List tables — no prefix
+        resp = _iceberg_json(f"/iceberg/v1/namespaces/{ns}/tables")
+        assert {"namespace": [ns], "name": table} in resp.get("identifiers", [])
+
+        # Load table — no prefix
+        resp = _iceberg_json(f"/iceberg/v1/namespaces/{ns}/tables/{table}")
+        assert resp.get("metadata-location", "").startswith(f"s3://{bucket_name}/{ns}/{table}/")
+        assert resp.get("metadata", {}).get("table-uuid")
+    finally:
+        try:
+            s3tables.delete_table(tableBucketARN=bucket_arn, namespace=ns, name=table)
+        except Exception:
+            pass
+        try:
+            s3tables.delete_namespace(tableBucketARN=bucket_arn, namespace=ns)
+        except Exception:
+            pass
+        s3tables.delete_table_bucket(tableBucketARN=bucket_arn)
