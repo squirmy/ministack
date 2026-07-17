@@ -4270,12 +4270,14 @@ def _s3tables_bucket_create(logical_id, props, stack_name):
         "ownerAccountId": get_account_id(),
         "createdAt": now_iso(), "tableCount": 0,
     }
+    _s3._buckets.setdefault(name, {"created": now_iso(), "objects": {}, "region": get_region()})
     return arn, {"TableBucketArn": arn}
 
 
 def _s3tables_bucket_delete(physical_id, props):
     name = physical_id.rsplit("/", 1)[-1]
     _s3tables._table_buckets.pop(name, None)
+    _s3._buckets.pop(name, None)
 
 
 def _s3tables_namespace_create(logical_id, props, stack_name):

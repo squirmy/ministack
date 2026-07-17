@@ -87,6 +87,44 @@ def test_s3tables_create_list_get_delete_bucket(s3tables):
     assert exc.value.response["Error"]["Code"] in ("NotFoundException", "404")
 
 
+def test_s3tables_table_bucket_provisions_backing_s3_bucket(s3tables):
+    """Creating a table bucket must automatically provision a same-named S3 bucket
+    so that data-plane writes (Parquet files, manifests) have storage to land in —
+    mirroring real AWS where S3 Tables manages underlying storage transparently."""
+    import boto3
+    from botocore.config import Config
+    name = f"tb-backing-{_uuid_mod.uuid4().hex[:8]}"
+    arn = s3tables.create_table_bucket(name=name)["arn"]
+    try:
+        s3_client = boto3.client(
+            "s3",
+            endpoint_url=_ENDPOINT,
+            aws_access_key_id="test",
+            aws_secret_access_key="test",
+            region_name="us-east-1",
+            config=Config(retries={"mode": "standard"}),
+        )
+        # The backing bucket must be accessible via the S3 API
+        s3_client.head_bucket(Bucket=name)
+
+        # And must accept object writes (simulating a Parquet data file)
+        s3_client.put_object(Bucket=name, Key="ns/tbl/data/part-0.parquet", Body=b"parquet")
+        obj = s3_client.get_object(Bucket=name, Key="ns/tbl/data/part-0.parquet")
+        assert obj["Body"].read() == b"parquet"
+        # Deleting the table bucket must also remove the backing S3 bucket
+        s3tables.delete_table_bucket(tableBucketARN=arn)
+        from botocore.exceptions import ClientError as _CE
+        with pytest.raises(_CE) as exc:
+            s3_client.head_bucket(Bucket=name)
+        assert exc.value.response["Error"]["Code"] in ("404", "NoSuchBucket")
+    except Exception:
+        try:
+            s3tables.delete_table_bucket(tableBucketARN=arn)
+        except Exception:
+            pass
+        raise
+
+
 def test_s3tables_get_bucket_missing_returns_not_found(s3tables):
     fake_arn = "arn:aws:s3tables:us-east-1:000000000000:bucket/does-not-exist-xyz"
     with pytest.raises(ClientError) as exc:

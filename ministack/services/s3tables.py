@@ -218,6 +218,11 @@ def _create_table_bucket(data):
     arn = _bucket_arn(name)
     _table_buckets[name] = {"arn": arn, "name": name, "ownerAccountId": get_account_id(),
                              "createdAt": now_iso(), "tableCount": 0}
+    # Provision the backing S3 bucket so data-plane writes (Parquet, manifests)
+    # have somewhere to land — mirrors real AWS where S3 Tables manages its own
+    # underlying storage transparently.
+    import ministack.services.s3 as _s3
+    _s3._buckets.setdefault(name, {"created": now_iso(), "objects": {}, "region": get_region()})
     logger.info("S3Tables: created table bucket %s", name)
     return json_response({"arn": arn})
 
@@ -252,6 +257,8 @@ def _delete_table_bucket(arn):
         if key.startswith(arn + "\x00"):
             del _namespaces[key]
     del _table_buckets[name]
+    import ministack.services.s3 as _s3
+    _s3._buckets.pop(name, None)
     return json_response({})
 
 
